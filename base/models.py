@@ -1,10 +1,16 @@
 from django.db import models
+from soft_delete_it.models import SoftDeleteModel
+'''
+objects 返回没有删除的所有数据
+all_objects 返回所有数据
+delete 删除数据，假删
+undelete 恢复假删数据
+'''
 
 
-class Group(models.Model):
+class Group(SoftDeleteModel):
     name = models.CharField(max_length=255,default='',null=True,verbose_name='英文名')
     zhname = models.CharField(max_length=255,default='',null=True,verbose_name='中文名')
-    is_delete = models.BooleanField(default=False,verbose_name='是否删除')
     sort = models.IntegerField(default=1,verbose_name='排序')
     created = models.DateTimeField(auto_now_add=True,null=True,verbose_name='创建时间')
     updated = models.DateTimeField(auto_now=True, verbose_name='更新时间')
@@ -15,7 +21,7 @@ class Group(models.Model):
         verbose_name_plural = verbose_name
 
 
-class User(models.Model):
+class User(SoftDeleteModel):
     GENDER_CHOICES = (
         (0, '男'),
         (1, '女'),
@@ -34,7 +40,6 @@ class User(models.Model):
     qq = models.CharField(max_length=255,null=True,verbose_name='绑定qq')
     weixin = models.CharField(max_length=255,null=True,verbose_name='绑定微信')
     group = models.ForeignKey(Group, on_delete=models.CASCADE, verbose_name='用户组',null=True)
-    is_delete = models.BooleanField(default=False,verbose_name='是否删除')
     sort = models.IntegerField(default=1,verbose_name='排序')
     created = models.DateTimeField(auto_now_add=True,null=True,verbose_name='创建时间')
     updated = models.DateTimeField(auto_now=True, verbose_name='更新时间')
