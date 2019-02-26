@@ -58,22 +58,26 @@ class {name}View(generics.GenericAPIView):
         try:
             json_data = {{"message": "ok", "errorCode": 0, "data": {{}}}}
             id = request.GET.get('id')
+            search_type = request.GET.get('search_type')
+            keyword = request.GET.get('keyword')
             print('是否存在ID',id)
-            if not id:
+            print('是否存在search_type',search_type)
+            print('是否存在keyword',keyword)
+            if not id and not search_type:
                 my_queryset = {name}.objects.all().order_by('sort','-created')
-                pagination_clas = SchoolShopPagination()
-                page_list = pagination_clas.paginate_queryset(queryset=my_queryset,request=request,view=self)
-                serializer = {name}Serializer(instance=page_list, many=True)
-                json_data['data'] = serializer.data
-                json_data['tatol'] = len(my_queryset)
+            elif id:
+                my_queryset = {name}.objects.filter(id=id)
             else:
-                my_queryset = {name}.objects.filter(id=id).first()
-                serializer = {name}Serializer(instance=my_queryset)
-                json_data['data'] = serializer.data
+                my_queryset = {name}.objects.all().order_by('sort','-created')
+            pagination_clas = BasePagination()
+            page_list = pagination_clas.paginate_queryset(queryset=my_queryset,request=request,view=self)
+            serializer = {name}Serializer(instance=page_list, many=True)
+            json_data['data'] = serializer.data
+            json_data['tatol'] = len(my_queryset)
             return Response(json_data)
         except Exception as e:
             print(e)
-            return Response({{"message": "网络错误", "errorCode": 1, "data": {{}}}})
+            return Response({{"message": "网络错误：%s" % str(e), "errorCode": 1, "data": {{}}}})
     def post(self,request):
         '''
         新增{verbose}接口
@@ -94,8 +98,8 @@ class {name}View(generics.GenericAPIView):
             return Response(json_data)
         except Exception as e:
             print(e)
-            return Response({{"message": "网络错误", "errorCode": 1, "data": {{}}}})
-    def patch(self,request):
+            return Response({{"message": "网络错误：%s" % str(e), "errorCode": 1, "data": {{}}}})
+    def put(self,request):
         '''
         修改{verbose}接口
         需要登录才可访问
@@ -121,7 +125,7 @@ class {name}View(generics.GenericAPIView):
             return Response(json_data)
         except Exception as e:
             print(e)
-            return Response({{"message": "网络错误", "errorCode": 1, "data": {{}}}})
+            return Response({{"message": "网络错误：%s" % str(e), "errorCode": 1, "data": {{}}}})
     def delete(self,request):
         '''
         删除{verbose}接口
@@ -144,7 +148,7 @@ class {name}View(generics.GenericAPIView):
             return Response(json_data)
         except Exception as e:
             print(e)
-            return Response({{"message": "网络错误", "errorCode": 1, "data": {{}}}})
+            return Response({{"message": "网络错误：%s" % str(e), "errorCode": 1, "data": {{}}}})
         """.format(name=name, verbose=verbose)
 
         def underscore(str):
@@ -166,4 +170,4 @@ class {name}View(generics.GenericAPIView):
         print("%s生成完毕！"%name)
 except Exception as e:
     print(e)
-    print("代码生成过程出错...")
+    print("代码生成过程出错，错误原因：%s" % str(e))
