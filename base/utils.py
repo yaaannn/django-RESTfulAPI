@@ -130,3 +130,13 @@ def create_password(password):
     h.update(bytes(password, encoding='utf-8'))
     h_result = h.hexdigest()
     return h_result
+
+
+
+# 定时任务的 task
+def task():
+    try:
+        loca_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print('本地时间：'+str(loca_time))
+    except Exception as e:
+        print('发生错误，错误信息为：',e)

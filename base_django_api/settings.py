@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_swagger',
     'base.apps.BaseConfig',
+    'django_crontab'
 ]
 
 MIDDLEWARE = [
@@ -218,5 +219,18 @@ SWAGGER_SETTINGS = {
             'in': 'header'
         }
     }
-
 }
+
+# 定时任务
+'''
+crontab范例：
+每五分钟执行    */5 * * * *
+每小时执行     0 * * * *
+每天执行       0 0 * * *
+每周执行       0 0 * * 0
+每月执行       0 0 1 * *
+'''
+CRONJOBS = [
+    # 表示每一分钟执行一次
+    ('*/1 * * * *', 'base.utils.task','>> /tmp/testapi_crontab.log') # 必须存在这个log文件
+]
