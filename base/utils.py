@@ -1,11 +1,12 @@
 import base64, json, re, jwt
-from datetime import datetime
+# from datetime import datetime
 from calendar import timegm
 from .settings import api_settings
 # 导入谷歌验证码相关模块
 import pyotp,time
 # 导入使用缓存的模块
 from django.core.cache import cache
+import hashlib, random, datetime, time
 
 
 
@@ -13,13 +14,13 @@ from django.core.cache import cache
 def jwt_payload_handler(account):
     payload = {
         'id': account.pk,
-        'exp': datetime.utcnow() + api_settings.JWT_EXPIRATION_DELTA  # 过期时间
+        'exp': datetime.datetime.utcnow() + api_settings.JWT_EXPIRATION_DELTA  # 过期时间
     }
     # Include original issued at time for a brand new token,
     # to allow token refresh
     if api_settings.JWT_ALLOW_REFRESH:
         payload['orig_iat'] = timegm(
-            datetime.utcnow().utctimetuple()
+            datetime.datetime.utcnow().utctimetuple()
         )
     if api_settings.JWT_AUDIENCE is not None:
         payload['aud'] = api_settings.JWT_AUDIENCE
@@ -101,35 +102,33 @@ class VisitThrottle(BaseThrottle):
     def allow_request(self,request,view):
         remote_addr = request.META.get('REMOTE_ADDR')
         print('请求的IP：',remote_addr)
-        import time
-        ctime=time.time()
+        ctime = time.time()
         if remote_addr not in VISIT_RECORD:
-            VISIT_RECORD[remote_addr]=[ctime,]
+            VISIT_RECORD[remote_addr] = [ctime,]
             return True
-        history=VISIT_RECORD.get(remote_addr)
-        self.history=history
-        while history and history[-1]<ctime-60:
+        history = VISIT_RECORD.get(remote_addr)
+        self.history = history
+        while history and history[-1] < ctime - 60:
             history.pop()
-        if len(history)<20: # 限制的频数
+        if len(history) < 30: # 限制的频数 设置同一IP该接口一分钟内只能被访问20次
             history.insert(0,ctime)
             return True
         else:
             return False
     def wait(self):
-        import time
-        ctime=time.time()
-        return 60-(ctime-self.history[-1])
+        ctime = time.time()
+        return 60 - (ctime-self.history[-1])
 
 
 
 
-# 密码加密模块
-def create_password(password):
-    import hashlib
-    h = hashlib.sha256()
-    h.update(bytes(password, encoding='utf-8'))
-    h_result = h.hexdigest()
-    return h_result
+# # 密码加密模块
+# def create_password(password):
+#     import hashlib
+#     h = hashlib.sha256()
+#     h.update(bytes(password, encoding='utf-8'))
+#     h_result = h.hexdigest()
+#     return h_result
 
 
 
@@ -140,3 +139,26 @@ def task():
         print('本地时间：'+str(loca_time))
     except Exception as e:
         print('发生错误，错误信息为：',e)
+
+
+
+
+class NormalObj(object):
+    # 生成加密密码 参数：password
+    def create_password(password):
+        h = hashlib.sha256()
+        h.update(bytes(password, encoding='utf-8'))
+        h_result = h.hexdigest()
+        return h_result
+    # 生成随机验证码
+    def create_code():
+        base_str = '0123456789qwerrtyuioplkjhgfdsazxcvbnm'
+        return ''.join(random.sample(base_str, 6))
+    # 生成订单编号 参数订单类型：order_type
+    def create_order(order_type):
+        now_date_time_str = str(datetime.datetime.now().strftime('%Y%m%d%H%M%S%f'))
+        base_str = '01234567890123456789'
+        random_num = ''.join(random.sample(base_str, 6))
+        random_num_two = ''.join(random.sample(base_str, 5))
+        order_num = now_date_time_str + str(order_type) + random_num + random_num_two
+        return order_num

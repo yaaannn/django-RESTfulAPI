@@ -7,9 +7,6 @@ pymysql.install_as_MySQLdb()
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/2.0/howto/deployment/checklist/
-
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = '0b($)a_$n$!grvsj!pob$5z4(q+u3fo_)aoz!g)3^=pk@7g770'
 
@@ -17,15 +14,13 @@ SECRET_KEY = '0b($)a_$n$!grvsj!pob$5z4(q+u3fo_)aoz!g)3^=pk@7g770'
 DEBUG = True  #开发时设置为True 线上环境设置为False
 
 ALLOWED_HOSTS = ['*']
-CORS_ORIGIN_ALLOW_ALL = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTOCOL', 'https')
 
 # 配置请求体大小100m
 DATA_UPLOAD_MAX_MEMORY_SIZE = 104857600
-# 如果出现报错为：django.template.response.ContentNotRenderedError: The response content must be rendered before it can be accessed.
-# 那么很有可能是数据库的问题：在jwt的认证模块中，搜索用户的位置查找问题
 
 # 处理跨域的问题
+CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS= True
 CORS_ALLOW_HEADERS = ('*')
 
@@ -51,7 +46,10 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_swagger',
     'base.apps.BaseConfig',
-    'django_crontab'
+    'django_crontab',
+    'django_filters',
+    'drf_yasg',
+    # 'rest_framework_jwt'
 ]
 
 MIDDLEWARE = [
@@ -63,7 +61,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    # 'middleware.BaseMiddleWare.myMiddle',
+    'middleware.BaseMiddleWare.myMiddle',   # 日志格式化中间件
+    'middleware.BaseMiddleWare.JsondataMiddleware',   # response 格式化中间件
 ]
 
 ROOT_URLCONF = 'base_django_api.urls'
@@ -88,8 +87,7 @@ WSGI_APPLICATION = 'base_django_api.wsgi.application'
 
 
 # Database
-# https://docs.djangoproject.com/en/2.0/ref/settings/#databases
-
+# 使用测试 sqlite3 数据库
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -111,7 +109,6 @@ DATABASES = {
 '''
 
 # Password validation
-# https://docs.djangoproject.com/en/2.0/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -130,7 +127,6 @@ AUTH_PASSWORD_VALIDATORS = [
 
 
 # Internationalization
-# https://docs.djangoproject.com/en/2.0/topics/i18n/
 
 LANGUAGE_CODE = 'zh-hans'  #中文语言
 
@@ -144,7 +140,6 @@ USE_TZ = False  #不使用UTC格式时间
 
 
 # Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/2.0/howto/static-files/
 
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [
@@ -160,15 +155,19 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # rest 相关配置
-REST_FRAMEWORK = {
-    'DEFAULT_FILTER_BACKENDS': ('django_filters.rest_framework.DjangoFilterBackend',),
+# REST_FRAMEWORK = {
+    # 'DEFAULT_FILTER_BACKENDS': ('django_filters.rest_framework.DjangoFilterBackend',),
+    # # 权限认证
     # 'DEFAULT_PERMISSION_CLASSES': (
     #     'rest_framework.permissions.IsAuthenticated',
     # ),
+    # # 身份验证
     # 'DEFAULT_AUTHENTICATION_CLASSES': (
     #     'rest_framework_jwt.authentication.JSONWebTokenAuthentication',
+    #     'rest_framework.authentication.SessionAuthentication',
+    #     'rest_framework.authentication.BasicAuthentication',
     # ),
-}
+# }
 
 CACHES = {
     "default": {
@@ -200,19 +199,17 @@ SWAGGER_SETTINGS = {
     # 使用这个时需要使用django默认自带的admin
     # 'LOGIN_URL': '/admin/login',
     # 'LOGOUT_URL': '/admin/logout',
-
     # 使用这个时需要使用django-rest的admin 也就是需要配置 url(r'^api-auth/', include('rest_framework.urls', namespace='rest_framework')),
-    'LOGIN_URL': 'rest_framework:login',
-    'LOGOUT_URL': 'rest_framework:logout',
-
+    # 'LOGIN_URL': 'rest_framework:login',
+    # 'LOGOUT_URL': 'rest_framework:logout',
     # 'DEFAULT_INFO': 'beatop.urls.swagger_info',
-    'USE_SESSION_AUTH': True,
+    'USE_SESSION_AUTH': False, # 不使用django自带的admin登录
     # 'SHOW_EXTENSIONS': False,
     'DOC_EXPANSION': 'none',  # none/list/full
     'SECURITY_DEFINITIONS': {
-        'Basic': {
-            'type': 'basic'
-        },
+        # 'Basic': {
+        #     'type': 'basic'
+        # },
         'Bearer': {
             'type': 'apiKey',
             'name': 'Authorization',
@@ -234,3 +231,40 @@ CRONJOBS = [
     # 表示每一分钟执行一次
     ('*/1 * * * *', 'base.utils.task','>> /tmp/testapi_crontab.log') # 必须存在这个log文件
 ]
+
+
+# JWT 使用官方jwt时开启此配置
+# JWT_AUTH = {
+#     'JWT_EXPIRATION_DELTA': datetime.timedelta(days=7),
+#     'JWT_REFRESH_EXPIRATION_DELTA': datetime.timedelta(days=7),
+#     'JWT_AUTH_HEADER_PREFIX': 'Bearer ',
+# }
+
+# 日志配置
+LOGGING = {
+    'version': 1,  # 指明dictConnfig的版本
+    'disable_existing_loggers': False,  # 表示是否禁用所有的已经存在的日志配置
+    'formatters': {  # 格式器
+        'verbose': {  # 详细
+            'format': '%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s'
+        },
+        'standard': {  # 标准
+            'format': '[%(asctime)s] [%(levelname)s] %(message)s'
+        },
+    },
+    'handlers': { 
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'stream': 'ext://sys.stdout', 
+            'formatter': 'standard'
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+    },
+}

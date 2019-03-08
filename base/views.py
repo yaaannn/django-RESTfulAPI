@@ -1,20 +1,28 @@
 from django.db.models import Q
-from rest_framework import serializers, status, generics
-# 使用APIView
+from rest_framework import serializers, status, generics, mixins, viewsets
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.views import APIView
+from rest_framework.viewsets import ModelViewSet
 from rest_framework.response import Response
-import datetime,time,random
+from rest_framework.filters import SearchFilter, OrderingFilter
+from django_filters.rest_framework import DjangoFilterBackend
+# 内置包
+import uuid, os, requests, json, re, time, datetime, random, hashlib, xml
+# 官方JWT
+# from rest_framework_jwt.utils import jwt_payload_handler, jwt_encode_handler ,jwt_response_payload_handler
+# from rest_framework_jwt.authentication import JSONWebTokenAuthentication
 # 缓存配置
 from django.core.cache import cache
+# 下面是定制类导入配置
+from .filters import UserFilter
+from .permissions import IsAuthenticated, BasePermission
 # JWT配置
-# from .utils import jwt_payload_handler, jwt_encode_handler,google_otp,request_log
-from .utils import *
+from .utils import jwt_response_payload_handler,jwt_payload_handler,jwt_encode_handler,google_otp,request_log, VisitThrottle
+# from .utils import *
 from .authentication import JWTAuthentication
 from .models import *
 from .serializers import *
-# 内置包
-import uuid, os, requests, json, re, time, datetime, random, hashlib, xml
+
 '''
 name = serializers.CharField(max_length=None, min_length=None, allow_blank=False, trim_whitespace=True)
 name = serializers.EmailField(max_length=None, min_length=None, allow_blank=False)
@@ -24,7 +32,24 @@ name = serializers.DateTimeField(format=api_settings.DATETIME_FORMAT, input_form
 name = serializers.DateField(format=api_settings.DATE_FORMAT, input_formats=None)
 name = serializers.BooleanField()
 name = serializers.ListField(child=serializers.IntegerField(min_value=0, max_value=100))
+(mixins.CreateModelMixin,mixins.RetrieveModelMixin,mixins.UpdateModelMixin,mixins.DestroyModelMixin,mixins.ListModelMixin,generics.GenericAPIView,viewsets.GenericViewSet)
+Q(name__icontains=keyword)
 '''
+# 定pagination类
+class Pagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    page_query_param = 'page'
+    max_page_size = 100
+
+    def get_paginated_response(self, data):
+        return Response({
+            'count': self.page.paginator.count,
+            'next': self.get_next_link(),
+            'previous': self.get_previous_link(),
+            'data': data
+        })
+
 
 
 
@@ -55,28 +80,25 @@ class Login(generics.GenericAPIView):
             if phone:
                 if not phone_re.match(phone):
                     return Response({"message": "手机号格式错误", "errorCode": 2, "data": {}})
-                user = User.objects.filter(is_delete=False,phone=phone).first()
+                user = User.objects.filter(phone=phone).first()
                 if not user:
                     return Response({"message": "用户不存在", "errorCode": 2, "data": {}})
             if email:
                 if not email_re.match(email):
                     return Response({"message": "邮箱格式错误", "errorCode": 2, "data": {}})
-                user = User.objects.filter(is_delete=False,email=email).first()
+                user = User.objects.filter(email=email).first()
                 if not user:
                     return Response({"message": "用户不存在", "errorCode": 2, "data": {}})
             if user.password == password:
                 payload = jwt_payload_handler(user)
                 token = jwt_encode_handler(payload)
-                return Response({"message": "登录成功", "errorCode": 0, "data": {'token':token}})
+                data = jwt_response_payload_handler(token,user,request)
+                return Response({"message": "登录成功", "errorCode": 0, "data": data})
             else:
                 return Response({"message": "密码错误", "errorCode": 0, "data": {}})
         except Exception as e:
             print(e)
             return Response({"message": "未知错误", "errorCode": 1, "data": {}})
-
-
-
-
 
 class UserRegisterSerializer(serializers.Serializer):
     username = serializers.CharField()
@@ -105,7 +127,7 @@ class Register(generics.GenericAPIView):
             if phone:
                 if not phone_re.match(phone):
                     return Response({"message": "手机号格式错误", "errorCode": 2, "data": {}})
-                account_check = User.objects.filter(phone=phone, is_delete=False)
+                account_check = User.objects.filter(phone=phone)
                 if account_check:
                     return Response({"message": "用户已经存在", "errorCode": 2})
                 account = User()
@@ -125,7 +147,7 @@ class Register(generics.GenericAPIView):
                 #     return Response({"message": "验证码已过期", "errorCode": 2})
                 # if '123456' != captcha:
                 #     return Response({"message": "验证码错误", "errorCode": 2})
-                account_check = User.objects.filter(email=email, is_delete=False)
+                account_check = User.objects.filter(email=email)
                 if account_check:
                     return Response({"message": "用户已经存在", "errorCode": 2})
                 account = User()
@@ -141,9 +163,6 @@ class Register(generics.GenericAPIView):
             print(e)
             return Response({"message": "未知错误", "errorCode": 1, "data": {}})
 
-
-
-
 class UserInfo(APIView):
     # 加上用户验证 携带正确token时就会有user，否则就是AnonymousUser 就是没有用户的状态
     authentication_classes = (JWTAuthentication,)
@@ -152,7 +171,7 @@ class UserInfo(APIView):
         try:
             if not request.auth:
                 return Response({"message": "请先登录", "errorCode": 2, "data": {}})
-            user = User.objects.filter(id=request.user.id,is_delete=False).first()
+            user = User.objects.filter(id=request.user.id).first()
             serializer_user_data = UserSerializer(user)
             json_data = {"message": "ok", "errorCode": 0, "data": {}}
             json_data['data'] = serializer_user_data.data
@@ -161,118 +180,74 @@ class UserInfo(APIView):
             print(e)
             return Response({"message": "未知错误", "errorCode": 1, "data": {}})
 
-            
 
 
-"""
-class AddressViewSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Address
-        fields = ('id','region','user','receive_name','receive_phone','detail_addr','is_default','sort')
-class AddressView(generics.GenericAPIView):
+
+class UserViewset(ModelViewSet,viewsets.GenericViewSet):
+
+    # queryset = User.objects.all().order_by('-created')
+    # 主要permission要和authentication配合使用才会生效
+    authentication_classes = [JWTAuthentication,]
+    # permission_classes = [IsAuthenticated,]
+    # 频率验证 
+    throttle_classes = [VisitThrottle]
+    # serializer_class = UserSerializer
+    # drf 过滤&搜索&排序
+    filter_backends=(DjangoFilterBackend,SearchFilter,OrderingFilter,)
+    # 搜索 如何使用 ?search=xx
+    search_fields = ('phone', 'name','group__name','group__zhname') # group__name 是搜索外键里面的内容
+    # 过滤 如何使用 ?name=xx  phone=xx 使用django自带的方法
+    # filter_fields = ('name', 'phone',)
+    # 使用django-filter方法
+    filter_class = UserFilter
+    # 排序 如何使用 ?ordering=xx
+    ordering_fields = ('updated',)
+    pagination_class = Pagination
+
+    # 动态的根据需求 选择serializers
+    def get_serializer_class(self):
+        # 创建是修改对应的Serializer 兼容外键的输入
+        if self.action == 'create':
+            return AddUserSerializer
+        return UserSerializer
+
+    # 可以根据需求动态 选择不同 queryset
+    def get_queryset(self):
+        # print(dir(self))
+        print(self.request.user)
+        return User.objects.all().order_by('-created')
+    
+    # 动态的根据访问方式来选择 permissions
+    def get_permissions(self):
+        if self.action == 'list':
+            return []
+        else:
+            return [IsAuthenticated()]
+
+
+
+
+class GroupViewset(ModelViewSet):
+    '''
+    测试接口
+    '''
+
+    queryset = Group.objects.all().order_by('-created')
     authentication_classes = (JWTAuthentication,)
-    serializer_class = AddressViewSerializer
-    def get(self,request):
-        '''
-        获取地址信息接口
-        无需登录便可访问
-        参数：
-        id 传入id返回该条详细数据；否则返回全部数据
-        page 页码
-        page_size 每页数据量
-        '''
-        request_log(request)
-        try:
-            json_data = {"message": "ok", "errorCode": 0, "data": {}}
-            if not request.auth:
-                return Response({"message": "请先登录", "errorCode": 2, "data": {}})
-            group_id = request.user.group.id
-            print('用户组ID：',group_id)
-            # if group_id == 4:
-            my_queryset = Address.objects.filter(user_id=request.user.id).order_by('sort','-created')
-            pagination_clas = SchoolShopPagination()
-            page_list = pagination_clas.paginate_queryset(queryset=my_queryset,request=request,view=self)
-            serializer = AddressSerializer(instance=page_list, many=True)
-            json_data['data'] = serializer.data
-            json_data['tatol'] = len(my_queryset)
-            # print(dir(status))
-            return Response(json_data)
-        except Exception as e:
-            print(e)
-            return Response({"message": "网络错误", "errorCode": 1, "data": {}})
-    def post(self,request):
-        '''
-        新增地址信息接口
-        需要登录才可访问
-        参数：
-        如接口示或联系后端人员
-        '''
-        request_log(request)
-        try:
-            if not request.auth:
-                return Response({"message": "请先登录", "errorCode": 2, "data": {}})
-            json_data = {"message": "ok", "errorCode": 0, "data": {}}
-            request.data['user'] = request.user.id
-            print(request.data)
-            serializer = self.get_serializer(data=request.data)
-            if not serializer.is_valid():
-                return Response({"message": str(serializer.errors), "errorCode": 4, "data": {}})
-            serializer.save()
-            json_data['data'] = serializer.data
-            return Response(json_data)
-        except Exception as e:
-            print(e)
-            return Response({"message": "网络错误", "errorCode": 1, "data": {}})
-    def patch(self,request):
-        '''
-        修改地址信息接口
-        需要登录才可访问
-        参数：
-        如接口示或联系后端人员
-        '''
-        request_log(request)
-        try:
-            if not request.auth:
-                return Response({"message": "请先登录", "errorCode": 2, "data": {}})
-            json_data = {"message": "ok", "errorCode": 0, "data": {}}
-            id = request.data.get('id')
-            if not id:
-                return Response({"message": "id为必要字段", "errorCode": 2, "data": {}})
-            item = Address.objects.filter(id=id).first()
-            if not item:
-                return Response({"message": "数据不存在或已经被删除", "errorCode": 2, "data": {}})
-            request.data['user'] = request.user.id
-            print(request.data)
-            serializer = self.get_serializer(item,data=request.data)
-            if not serializer.is_valid():
-                return Response({"message": str(serializer.errors), "errorCode": 4, "data": {}})
-            serializer.save()
-            json_data['data'] = serializer.data
-            return Response(json_data)
-        except Exception as e:
-            print(e)
-            return Response({"message": "网络错误", "errorCode": 1, "data": {}})
-    def delete(self,request):
-        '''
-        删除地址信息接口
-        需要登录才可以访问
-        参数：
-        如接口示或联系后端人员
-        '''
-        request_log(request)
-        try:
-            if not request.auth:
-                return Response({"message": "请先登录", "errorCode": 2, "data": {}})
-            json_data = {"message": "ok", "errorCode": 0, "data": {}}
-            id = request.data.get('id')
-            if not id:
-                return Response({"message": "id为必要字段", "errorCode": 2, "data": {}})
-            item = Address.objects.filter(id=id).first()
-            if not item:
-                return Response({"message": "数据不存在或已经被删除", "errorCode": 2, "data": {}})
-            item.delete()
-            return Response(json_data)
-        except Exception as e:
-            print(e)
-            return Response({"message": "网络错误", "errorCode": 1, "data": {}})
-"""
+    permission_classes = [BasePermission,]
+    # 频率验证 
+    throttle_classes = [VisitThrottle]
+    serializer_class = GroupSerializer
+    # drf 过滤&搜索&排序
+    filter_backends=(DjangoFilterBackend,SearchFilter,OrderingFilter,)
+    # 搜索 如何使用 ?search=xx
+    search_fields = ('zhname', 'name',) # group__name 是搜索外键里面的内容
+    # 过滤 如何使用 ?name=xx  phone=xx 使用django自带的方法
+    filter_fields = ('name', 'zhname',)
+    # 使用django-filter方法
+    # filter_class = UserFilter
+    # 排序 如何使用 ?ordering=xx
+    ordering_fields = ('updated',)
+    pagination_class = Pagination
+
+

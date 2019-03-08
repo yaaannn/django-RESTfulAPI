@@ -37,7 +37,7 @@ class JWTAuthentication(BaseAuthentication):
         if not id:
             raise exceptions.AuthenticationFailed({"message": "没有该用户","errorCode":1,"data":{}})
         try:
-            user = User.objects.filter(id=id,is_delete = False).first()
+            user = User.objects.filter(id=id).first()
         except User.DoesNotExist:
             raise exceptions.AuthenticationFailed({"message": "没有该用户","errorCode":1,"data":{}})
         return user
