@@ -69,6 +69,8 @@ class JsondataMiddleware:
                 if response.status_code != 200:
                     if response.data.get('detail'):
                         data = {"message": response.data.get('detail'), "errorCode": 1, "data": {}}
+                    elif response.status_code == 201:
+                        data = {"message": 'ok', "errorCode": 0, "data": response.data}
                     else:
                         data = {"message": 'error', "errorCode": 1, "data": response.data}
                     response.data = data
