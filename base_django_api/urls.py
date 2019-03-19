@@ -27,10 +27,5 @@ urlpatterns = [
     url(r'swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     url(r'swagger/$', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     url(r'redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
-    # 官方配置
-    # path(r'admin/', admin.site.urls),
     path(r'account/', include('base.urls')),
-    # swagger配置
-    path(r'docs/', schema_view, name="docs"),
-    # path(r'api-auth/', include('rest_framework.urls', namespace='rest_framework')),
 ]

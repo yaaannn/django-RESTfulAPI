@@ -81,3 +81,14 @@ class BasePermission(object):
         print(request.user)
         print('请求的方法：',view.action)
         return True
+
+class AllowAllPermission(object):
+    """
+    A base class from which all permission classes should inherit.
+    """
+
+    def has_permission(self, request, view):
+        """
+        Return `True` if permission is granted, `False` otherwise.
+        """
+        return True

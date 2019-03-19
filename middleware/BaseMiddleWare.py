@@ -75,7 +75,7 @@ class JsondataMiddleware:
                 else:
                     if response.data.get('message'): # 兼容APIView返回data的设置
                         pass
-                    elif response.data.get('count'): # 兼容分页返回data的设置
+                    elif response.data.get('count') != None: # 兼容分页返回data的设置
                         response.data['errorCode'] = 0
                         response.data['message'] = 'ok'
                     else:
